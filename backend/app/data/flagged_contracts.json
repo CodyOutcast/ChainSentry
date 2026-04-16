@@ -1,0 +1,21 @@
+{
+  "1": {
+    "0xdead00000000000000000000000000000000beef": {
+      "label": "Demo Drain Contract",
+      "reason": "This demo address represents a spender contract associated with post-approval token drain behavior.",
+      "severity": "critical"
+    },
+    "0xbad00000000000000000000000000000000c0de": {
+      "label": "Demo Phishing Router",
+      "reason": "This demo address represents a router contract used in fake swap and approval flows.",
+      "severity": "high"
+    }
+  },
+  "11155111": {
+    "0xdead00000000000000000000000000000000beef": {
+      "label": "Demo Drain Contract",
+      "reason": "This demo address represents a spender contract associated with post-approval token drain behavior.",
+      "severity": "critical"
+    }
+  }
+}
