@@ -1,13 +1,23 @@
 # Graph ML Training Workspace
 
-This folder is the scaffold for Student 2's graph-model training pipeline.
+This folder now contains Student 2's end-to-end graph-model training pipeline.
 
-Recommended contents:
+Included workflow:
 
-- graph dataset preparation scripts
-- feature and label generation scripts
-- training entry points for the first R-GCN-style baseline
-- evaluation scripts that report precision, recall, F1, and severity calibration
-- model artifact export step for backend inference
+- `dataset.py`: deterministic synthetic dataset generation based on the current ChainSentry request schema
+- `train_graph_model.py`: training, evaluation, threshold selection, and artifact export
+- automatic bootstrap support when the backend starts with `CHAIN_SENTRY_PREDICTOR_BACKEND=graph-model`
 
-The Student 1 handoff does not include a dataset, training script, or trained model artifact.
+Typical command:
+
+```bash
+PYTHONPATH=backend .venv/bin/python -m app.ml.training.train_graph_model \
+  --artifact-path backend/app/ml/artifacts/graph-model.pt \
+  --metrics-path backend/app/ml/artifacts/graph-model-metrics.json
+```
+
+Notes:
+
+- The dataset is a reproducible student-project baseline built from synthetic transaction patterns and pseudo-labels produced by the current detectors.
+- The saved artifact is consumed by `app.ml.inference.GraphModelPredictor`.
+- The backend keeps the Student 1 heuristic path as a safety fallback if the model is unavailable.

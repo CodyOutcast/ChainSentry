@@ -1,24 +1,27 @@
 # ChainSentry Prototype
 
-ChainSentry is a two-part prototype:
+ChainSentry is an explainable pre-signature transaction risk prototype.
 
-• A FastAPI backend that currently parses transactions, runs baseline risk detectors, applies baseline simulation, and returns structured findings.
-• A React frontend that captures transaction data, connects to an injected wallet, runs the analysis, and displays risk cards for demos.
+It currently ships as a hybrid system:
+
+• A FastAPI backend that parses transactions, runs local simulation and heuristic checks, and augments them with a trained transaction-centered graph model.
+• A React frontend that captures transaction data, connects to an injected wallet, runs the analysis, and displays short risk cards for demos.
 
 ## Project Structure
 
-• `backend/`: FastAPI service, baseline risk logic, graph-ML integration surface, simulation prototype, and tests.
-• `frontend/`: Vite React client, demo scenarios, wallet integration, and report UI.
-• `docs/`: handoff and API documentation for Student 2.
+• `backend/`: FastAPI service, heuristic detectors, graph-model training/inference pipeline, simulation prototype, and tests.
+• `frontend/`: Vite React client, demo scenarios, wallet integration, and risk report UI.
+• `docs/`: API contract, Student 2 handoff, evaluation summary, and Chinese usage guides.
 • `info.md`: implementation plan and project reference.
 
 ## Final Project Direction
 
-The current Student 1 codebase is a baseline prototype, not the final ML deliverable.
+The repo now reflects the narrowed final scope:
 
-Student 2 is expected to build and integrate the required graph-based trained predictor model. The recommended design is a transaction-centered heterogeneous graph where addresses, contracts, tokens, and token-flow effects are represented as typed nodes and relations.
-
-The best fit for this repo is to keep the existing `POST /api/v1/analyze` contract stable, build the graph inside the backend from the current request plus local context, and use a relation-aware graph model such as an R-GCN as the first ML baseline.
+• Focus on a small set of common, explainable risks instead of a broad security platform.
+• Keep the existing `POST /api/v1/analyze` contract stable.
+• Use a transaction-centered local graph plus scalar features as the ML baseline.
+• Preserve short user-facing explanations and actionable recommendations.
 
 ## First-Time Setup
 
@@ -43,8 +46,10 @@ The Student 1 handoff intentionally excludes generated folders such as `.venv/`,
 From the workspace root:
 
 ```bash
-.venv/bin/python -m uvicorn backend.app.main:app --reload
+PYTHONPATH=backend .venv/bin/python -m uvicorn app.main:app --reload
 ```
+
+If you are using a system Python environment instead of `.venv`, replace `.venv/bin/python` with `python3`.
 
 Backend URL:
 
@@ -71,7 +76,7 @@ Frontend URL:
 Backend tests:
 
 ```bash
-.venv/bin/python -m pytest backend/tests -q
+PYTHONPATH=backend .venv/bin/python -m pytest backend/tests -q
 ```
 
 Frontend build:
@@ -84,3 +89,15 @@ npm run build
 ## Student 2 Handoff
 
 See `docs/student2-handoff.md` for the integration guide and `docs/api-contract.md` for the request and response shapes.
+
+## Student 2 Usage
+
+For the Student 2 graph-model workflow and Chinese usage notes, see `docs/student2-使用说明.md`.
+
+## End-User Usage
+
+For a clear Chinese guide to running the app and reading the risk report, see `docs/用户使用说明.md`.
+
+## Evaluation Summary
+
+For the final scope, metrics, limitations, and response to teacher feedback, see `docs/评估与交付总结.md`.
