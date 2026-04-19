@@ -1,13 +1,17 @@
 from __future__ import annotations
 
+from collections import defaultdict
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Protocol
 
-from app.config import GRAPH_MODEL_ARCHITECTURE, GRAPH_MODEL_ARTIFACT_PATH, PREDICTOR_BACKEND
+from app.config import GRAPH_MODEL_ARTIFACT_PATH, PREDICTOR_BACKEND
+from app.content import explanation_templates
 from app.ml.features import ScalarFeatureSet, extract_scalar_features
 from app.ml.graph_builder import TransactionGraph, build_transaction_graph
-from app.ml.model import GraphModelMetadata, PlaceholderRGCNModel
-from app.models import NormalizedTransaction, RiskFinding, SimulationSummary
+from app.ml.model import GraphPredictionScores, LoadedGraphRiskModel
+from app.ml.training import bootstrap_graph_model_artifacts
+from app.models import NormalizedTransaction, RiskCategory, RiskFinding, Severity, SimulationSummary
 from app.services.detectors import run_detectors
 
 
@@ -17,6 +21,7 @@ class PredictorResult:
     graph: TransactionGraph
     features: ScalarFeatureSet
     findings: list[RiskFinding]
+    scores: GraphPredictionScores | None = None
 
 
 class RiskPredictor(Protocol):
@@ -46,6 +51,7 @@ class HeuristicFallbackPredictor:
             graph=graph,
             features=features,
             findings=findings,
+            scores=None,
         )
 
 
@@ -53,13 +59,9 @@ class GraphModelPredictor:
     name = "graph-model"
 
     def __init__(self) -> None:
-        self._model = PlaceholderRGCNModel(
-            GraphModelMetadata(
-                architecture=GRAPH_MODEL_ARCHITECTURE,
-                framework="pytorch-geometric",
-                artifact_path=GRAPH_MODEL_ARTIFACT_PATH,
-            )
-        )
+        if not GRAPH_MODEL_ARTIFACT_PATH.exists():
+            bootstrap_graph_model_artifacts(GRAPH_MODEL_ARTIFACT_PATH)
+        self._model = LoadedGraphRiskModel.load(GRAPH_MODEL_ARTIFACT_PATH)
 
     def predict(
         self,
@@ -68,11 +70,107 @@ class GraphModelPredictor:
     ) -> PredictorResult:
         graph = build_transaction_graph(transaction, simulation)
         features = extract_scalar_features(transaction, simulation, graph)
-        self._model.predict(graph, features)
-        raise NotImplementedError("Student 2 should replace GraphModelPredictor with trained graph-model inference.")
+        scores = self._model.predict(graph, features)
+        heuristic_findings = run_detectors(transaction, simulation)
+        findings = _merge_model_and_findings(
+            transaction=transaction,
+            simulation=simulation,
+            heuristic_findings=heuristic_findings,
+            scores=scores,
+            thresholds=self._model.thresholds,
+            graph=graph,
+        )
+        return PredictorResult(
+            source=self.name,
+            graph=graph,
+            features=features,
+            findings=findings,
+            scores=scores,
+        )
 
 
+@lru_cache(maxsize=2)
 def get_predictor() -> RiskPredictor:
-    if PREDICTOR_BACKEND == "graph-model":
+    if PREDICTOR_BACKEND == "heuristic-fallback":
+        return HeuristicFallbackPredictor()
+    try:
         return GraphModelPredictor()
+    except Exception:
+        return HeuristicFallbackPredictor()
     return HeuristicFallbackPredictor()
+
+
+def _merge_model_and_findings(
+    *,
+    transaction: NormalizedTransaction,
+    simulation: SimulationSummary,
+    heuristic_findings: list[RiskFinding],
+    scores: GraphPredictionScores,
+    thresholds: dict[str, float],
+    graph: TransactionGraph,
+) -> list[RiskFinding]:
+    grouped: dict[RiskCategory, list[RiskFinding]] = defaultdict(list)
+    for finding in heuristic_findings:
+        grouped[finding.category].append(finding)
+
+    merged: list[RiskFinding] = []
+    for category in (RiskCategory.approval, RiskCategory.destination, RiskCategory.simulation):
+        category_findings = grouped.get(category, [])
+        evidence = _model_evidence(category, scores, graph)
+        if category_findings:
+            merged.extend(_append_model_evidence(category_findings, evidence))
+            continue
+        probability = scores.category_scores.get(category.value, 0.0)
+        if probability < thresholds.get(category.value, 0.5):
+            continue
+        generic = _build_generic_model_finding(transaction, simulation, category, probability, evidence)
+        if generic is not None:
+            merged.append(generic)
+
+    return merged
+
+
+def _append_model_evidence(findings: list[RiskFinding], evidence: list[str]) -> list[RiskFinding]:
+    result: list[RiskFinding] = []
+    for finding in findings:
+        merged_evidence = finding.evidence + [item for item in evidence if item not in finding.evidence]
+        result.append(finding.model_copy(update={"evidence": merged_evidence}))
+    return result
+
+
+def _build_generic_model_finding(
+    transaction: NormalizedTransaction,
+    simulation: SimulationSummary,
+    category: RiskCategory,
+    probability: float,
+    evidence: list[str],
+) -> RiskFinding | None:
+    severity = _probability_to_severity(probability)
+    if category == RiskCategory.approval and transaction.transaction_kind.value == "approval":
+        return explanation_templates.model_approval_signal(transaction, probability, severity, evidence)
+    if category == RiskCategory.destination and transaction.transaction_kind.value not in {"transfer", "native_transfer"}:
+        return explanation_templates.model_destination_signal(transaction, probability, severity, evidence)
+    if category == RiskCategory.simulation and (simulation.triggered or simulation.profile.value != "none"):
+        return explanation_templates.model_simulation_signal(transaction, probability, severity, evidence)
+    return None
+
+
+def _model_evidence(category: RiskCategory, scores: GraphPredictionScores, graph: TransactionGraph) -> list[str]:
+    severity_profile = ", ".join(
+        f"{label}:{score:.2f}" for label, score in scores.severity_scores.items()
+    )
+    return [
+        f"Graph model {category.value} score: {scores.category_scores.get(category.value, 0.0):.2f}",
+        f"Graph shape: {graph.node_count} nodes, {graph.edge_count} edges",
+        f"Graph model severity profile: {severity_profile}",
+    ]
+
+
+def _probability_to_severity(probability: float) -> Severity:
+    if probability >= 0.85:
+        return Severity.critical
+    if probability >= 0.7:
+        return Severity.high
+    if probability >= 0.55:
+        return Severity.medium
+    return Severity.low

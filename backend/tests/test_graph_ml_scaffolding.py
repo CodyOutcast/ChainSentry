@@ -1,6 +1,8 @@
 from app.ml.features import extract_scalar_features
 from app.ml.graph_builder import build_transaction_graph
 from app.ml.inference import get_predictor
+from app.ml.training.dataset import build_synthetic_dataset
+from app.ml.training.train_graph_model import train_graph_model_artifact
 from app.models import TransactionRequest
 from app.services.parser import parse_transaction
 from app.services.simulation import simulation_engine
@@ -50,4 +52,35 @@ def test_feature_extractor_includes_graph_and_scalar_context() -> None:
 
 
 def test_default_predictor_remains_heuristic_fallback() -> None:
-    assert get_predictor().name == "heuristic-fallback"
+    assert get_predictor().name in {"graph-model", "heuristic-fallback"}
+
+
+def test_synthetic_dataset_contains_multiple_risk_patterns() -> None:
+    examples = build_synthetic_dataset(seed=7, dataset_size=120)
+
+    category_totals = {
+        "approval": sum(example.category_labels["approval"] for example in examples),
+        "destination": sum(example.category_labels["destination"] for example in examples),
+        "simulation": sum(example.category_labels["simulation"] for example in examples),
+    }
+
+    assert len(examples) >= 100
+    assert all(total > 0 for total in category_totals.values())
+
+
+def test_training_exports_artifact_and_metrics(tmp_path) -> None:
+    artifact_path = tmp_path / "graph-model.pt"
+    metrics_path = tmp_path / "graph-model-metrics.json"
+
+    metrics = train_graph_model_artifact(
+        artifact_path=artifact_path,
+        metrics_path=metrics_path,
+        seed=11,
+        dataset_size=160,
+        epochs=8,
+    )
+
+    assert artifact_path.exists()
+    assert metrics_path.exists()
+    assert "category_metrics" in metrics
+    assert "severity_accuracy" in metrics

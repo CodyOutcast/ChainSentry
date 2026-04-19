@@ -5,7 +5,7 @@
       "reason": "This demo address represents a spender contract associated with post-approval token drain behavior.",
       "severity": "critical"
     },
-    "0xbad00000000000000000000000000000000c0de": {
+    "0x0bad000000000000000000000000000000c0de00": {
       "label": "Demo Phishing Router",
       "reason": "This demo address represents a router contract used in fake swap and approval flows.",
       "severity": "high"

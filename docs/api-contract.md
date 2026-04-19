@@ -2,7 +2,7 @@
 
 The frontend and backend currently communicate through one endpoint.
 
-Important: this contract is the current baseline interface from Student 1. Student 2 is expected to integrate a graph-based trained predictor behind this API where practical, so the frontend can continue working during the ML transition.
+Important: this contract is still the stable frontend/backend interface first defined in Student 1. The current repo now runs a hybrid graph-model plus heuristic backend behind this API, so the frontend can keep working without request-shape changes.
 
 ## Endpoint
 
@@ -86,7 +86,7 @@ Supported `simulation_profile` values:
 
 ## Response Shape
 
-The example below reflects the current heuristic baseline implementation. Student 2 may change the internal scoring source to a graph-based trained predictor, but should preserve field names and types unless the frontend and documentation are updated together.
+The example below reflects the stable response schema. The current repo may populate `findings[].evidence` with graph-model scores and graph-shape details, but the top-level field names and types remain unchanged.
 
 ```json
 {

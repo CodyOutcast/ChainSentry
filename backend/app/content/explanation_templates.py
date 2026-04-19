@@ -130,3 +130,67 @@ def privilege_escalation(transaction: NormalizedTransaction, evidence: list[str]
         recommended_action="Reject unless the permission change is expected, documented, and required.",
         evidence=evidence,
     )
+
+
+def model_approval_signal(
+    transaction: NormalizedTransaction,
+    probability: float,
+    severity: Severity,
+    evidence: list[str],
+) -> RiskFinding:
+    spender = short_address(spender_label(transaction))
+    return RiskFinding(
+        id="model-approval-signal",
+        category=RiskCategory.approval,
+        severity=severity,
+        expected_action=transaction.summary,
+        risk_reason=(
+            f"The trained graph model scored this approval pattern as risky (score {probability:.2f}) "
+            f"based on the spender, token, and transaction relations."
+        ),
+        possible_impact="This pattern resembles approvals that leave reusable token access in place after the immediate action.",
+        recommended_action=f"Inspect whether {spender} truly needs persistent approval before signing.",
+        evidence=evidence,
+    )
+
+
+def model_destination_signal(
+    transaction: NormalizedTransaction,
+    probability: float,
+    severity: Severity,
+    evidence: list[str],
+) -> RiskFinding:
+    return RiskFinding(
+        id="model-destination-signal",
+        category=RiskCategory.destination,
+        severity=severity,
+        expected_action=transaction.summary,
+        risk_reason=(
+            f"The trained graph model assigned an elevated destination-risk score ({probability:.2f}) "
+            "to this contract interaction pattern."
+        ),
+        possible_impact="Signing can route value or permissions to a destination that behaves more broadly than the wallet prompt suggests.",
+        recommended_action="Inspect the destination contract, UI context, and expected asset movement before proceeding.",
+        evidence=evidence,
+    )
+
+
+def model_simulation_signal(
+    transaction: NormalizedTransaction,
+    probability: float,
+    severity: Severity,
+    evidence: list[str],
+) -> RiskFinding:
+    return RiskFinding(
+        id="model-simulation-signal",
+        category=RiskCategory.simulation,
+        severity=severity,
+        expected_action=transaction.summary,
+        risk_reason=(
+            f"The trained graph model linked the simulated effects and transaction graph to a risky behavior pattern "
+            f"(score {probability:.2f})."
+        ),
+        possible_impact="The transaction may enable follow-on effects or authority changes that are not obvious from the visible wallet prompt.",
+        recommended_action="Inspect the simulated effects and reject the transaction if the broader outcome is unexpected.",
+        evidence=evidence,
+    )

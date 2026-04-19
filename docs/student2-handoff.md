@@ -1,48 +1,61 @@
-# Student 2 Handoff Guide
+# Student 2 Final Handoff Guide
 
-This handoff is for Student 2's ML, product, and evaluation work.
+This handoff reflects the current repository state after the Student 2 graph-model integration.
 
-Important: the current backend is only a baseline heuristic prototype. The final project is expected to include a graph-based trained predictor model, and Student 2 owns that model work and its integration into the backend.
+Important: the repo is no longer only a heuristic scaffold. It now includes a reproducible graph-model training pipeline, saved artifacts, backend inference integration, and fallback behavior.
 
 ## What Is Already Implemented
 
 ### Backend
 Implemented in `backend/`:
 
-• FastAPI server with `POST /api/v1/analyze`.
-• Transaction request and response models.
-• Transaction parser and transaction-kind inference.
-• Baseline approval risk detection.
-• Baseline flagged destination checks.
-• Baseline heuristic simulation layer.
-• Explanation-ready findings with severity, impact, and recommendation fields.
-• Focused backend tests.
-
-Current limitation: the handoff now includes graph-construction and predictor scaffolding, but there is still no dataset pipeline, no training script, no saved model artifact, and no trained graph-predictor inference service yet.
+• FastAPI server with `POST /api/v1/analyze`
+• Stable request/response models
+• Transaction parser and transaction-kind inference
+• Baseline approval, destination, and simulation detectors
+• Heuristic simulation layer
+• Transaction-centered graph construction
+• Scalar feature extraction and vectorization
+• Graph-model training, evaluation, and artifact export
+• Backend graph-model inference with heuristic fallback
+• Focused backend tests
 
 ### Frontend
 Implemented in `frontend/`:
 
-• Wallet-aware React app using wagmi.
-• Editable transaction form.
-• Demo scenario loader.
-• API client wired to the backend.
-• Risk report UI with findings and simulation output.
-• Production build validation.
+• Wallet-aware React app using wagmi
+• Editable transaction form
+• Demo scenario loader
+• API client wired to the backend
+• Risk report UI with findings and simulation output
+• Production build validation
 
-## Student 2 Primary Responsibility
+## What Student 2 Delivered
 
-Student 2 should treat the graph-based trained predictor as a required workstream, not an optional extension.
+Student 2 now owns and has delivered the following workstreams in this repo:
 
-Student 2 is expected to:
+• Local heterogeneous transaction graph design
+• Scalar feature extraction and sample vectorization
+• Synthetic dataset generation based on current supported risk families
+• Reproducible graph-model training and metrics export
+• Saved artifact loading and graph-model inference inside the backend
+• Hybrid model-plus-rules finding generation
+• Updated Chinese documentation for setup, usage, and evaluation
 
-• Define the transaction-centered graph schema.
-• Define or finalize the label scheme for risky vs. safe transaction patterns.
-• Prepare or curate the training dataset used for the predictor.
-• Design node, edge, and scalar features for the model.
-• Train and evaluate the graph predictor.
-• Integrate graph-model inference into the backend while preserving the frontend contract where practical.
-• Document model limitations, metrics, and retraining steps.
+## Current Metrics
+
+Using the default training command and current codebase, the latest saved metrics are:
+
+• dataset total: 637
+• train examples: 477
+• test examples: 160
+• approval F1: 0.7955
+• destination F1: 0.6667
+• simulation F1: 1.0000
+• severity accuracy: 0.9125
+• severity macro F1: 0.9135
+
+These metrics come from the synthetic + pseudo-label training pipeline and should be presented as course-project evaluation results, not production claims.
 
 ## Recommended Graph ML Design
 
@@ -104,23 +117,26 @@ Use them to:
 • Combine model output with explainable findings.
 • Keep the API response shape stable unless the frontend is updated too.
 
-### New ML files Student 2 should extend
-Scaffolded location: `backend/app/ml/`
+### Current ML implementation
+Current location: `backend/app/ml/`
 
-Included scaffolding:
+Key files:
 
 • `graph_builder.py`
 • `features.py`
+• `vectorization.py`
 • `model.py`
 • `inference.py`
-• `training/`
+• `training/dataset.py`
+• `training/train_graph_model.py`
 
-Use them to:
+Use them to inspect or extend:
 
-• Build the heterogeneous graph from the parsed transaction.
-• Define feature extraction for nodes, edges, and scalars.
-• Train and save the graph model.
-• Load the model and run inference inside the backend.
+• graph construction
+• feature design
+• dataset generation
+• training and artifact export
+• inference integration
 
 ### Scenario content
 Edit `frontend/src/data/sampleTransactions.ts`.
@@ -218,17 +234,18 @@ The frontend includes these built-in demo scenarios:
 2. Re-run backend tests.
 3. Add a matching frontend scenario if needed.
 
-## Suggested Student 2 Work Plan
+## Remaining Optional Work
 
-1. Define the dataset, labels, and feature strategy for the trained predictor.
-2. Define the graph schema and train the first R-GCN-style baseline, then integrate inference into the backend.
-3. Update explanation wording so model-driven findings remain understandable.
-4. Expand or improve demo scenarios in `frontend/src/data/sampleTransactions.ts`.
-5. Adjust the frontend report UI and documentation for the final ML-backed flow.
+The core Student 2 deliverables are already present. Only optional extensions remain:
 
-## Validation Checklist After Student 2 Changes
+1. Replace synthetic data with a stronger labeled dataset
+2. Improve the simulation engine beyond heuristic effect templates
+3. Run a formal user study instead of only scenario-based evaluation
+4. Expand threat coverage beyond the current three risk families
 
-If the handoff folder was provided without generated dependencies, recreate them first:
+## Validation Checklist
+
+If the environment does not yet exist, recreate dependencies first:
 
 ```bash
 python3 -m venv .venv
@@ -237,17 +254,30 @@ cd frontend
 npm install
 ```
 
-Student 2 should also add and document the exact graph-model training and evaluation commands once the ML pipeline is created.
-
-Backend:
+Graph-model training:
 
 ```bash
-.venv/bin/python -m pytest backend/tests -q
+PYTHONPATH=backend python3 -m app.ml.training.train_graph_model \
+  --artifact-path backend/app/ml/artifacts/graph-model.pt \
+  --metrics-path backend/app/ml/artifacts/graph-model-metrics.json
 ```
 
-Frontend:
+Backend tests:
+
+```bash
+PYTHONPATH=backend python3 -m pytest backend/tests -q
+```
+
+Frontend build:
 
 ```bash
 cd frontend
 npm run build
 ```
+
+## Supporting Docs
+
+• `docs/student2-使用说明.md`: Chinese Student 2 workflow guide
+• `docs/用户使用说明.md`: Chinese end-user usage guide
+• `docs/评估与交付总结.md`: final scope, metrics, and evaluation summary
+• `docs/api-contract.md`: stable frontend/backend contract
