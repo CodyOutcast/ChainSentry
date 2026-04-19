@@ -140,3 +140,11 @@ vite.config.ts.timestamp-*
 
 
 /backend/app/ml/artifacts/graph-model.pt
+
+
+/data
+
+
+/.conda-envs
+/.conda-pkgs
+/.vendor

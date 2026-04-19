@@ -13,6 +13,10 @@ from app.ml.graph_builder import TransactionGraph
 from app.ml.vectorization import FeatureVocabulary, NormalizationStats, encode_sample
 
 
+SEVERITY_LABELS = ("low", "medium", "high", "critical")
+MAIN_BINARY_HEADS = ("approval", "destination", "simulation")
+
+
 @dataclass(frozen=True)
 class GraphModelMetadata:
     architecture: str
@@ -37,18 +41,20 @@ class GraphModelMetadata:
         "grants_privilege_to",
         "triggers_effect",
     )
-    task_heads: tuple[str, ...] = (
-        "approval",
-        "destination",
-        "simulation",
-        "severity",
-    )
+    task_heads: tuple[str, ...] = ("approval", "destination", "simulation", "severity")
+    auxiliary_binary_heads: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
 class GraphPredictionScores:
     category_scores: dict[str, float] = field(default_factory=dict)
     severity_scores: dict[str, float] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class GraphForwardOutput:
+    binary_logits: dict[str, torch.Tensor] = field(default_factory=dict)
+    multiclass_logits: dict[str, torch.Tensor] = field(default_factory=dict)
 
 
 class GraphRiskModel(Protocol):
@@ -60,11 +66,12 @@ class GraphRiskModel(Protocol):
 
 @dataclass(frozen=True)
 class RelationAwareGraphModelConfig:
-    hidden_dim: int = 32
+    hidden_dim: int = 64
     relation_layers: int = 2
-    categorical_embedding_dim: int = 4
-    feature_hidden_dim: int = 24
-    dropout: float = 0.1
+    categorical_embedding_dim: int = 8
+    feature_hidden_dim: int = 48
+    head_hidden_dim: int = 64
+    dropout: float = 0.15
 
 
 class RelationAwareGraphModel(nn.Module):
@@ -76,10 +83,13 @@ class RelationAwareGraphModel(nn.Module):
         categorical_cardinalities: list[int],
         numeric_dim: int,
         boolean_dim: int,
+        auxiliary_binary_heads: tuple[str, ...] = (),
         config: RelationAwareGraphModelConfig,
     ) -> None:
         super().__init__()
         self.config = config
+        self.main_binary_heads = MAIN_BINARY_HEADS
+        self.auxiliary_binary_heads = auxiliary_binary_heads
         self.node_embedding = nn.Embedding(num_node_types, config.hidden_dim)
         self.self_layers = nn.ModuleList(
             [nn.Linear(config.hidden_dim, config.hidden_dim) for _ in range(config.relation_layers)]
@@ -102,20 +112,24 @@ class RelationAwareGraphModel(nn.Module):
             nn.Dropout(config.dropout),
         )
         combined_dim = config.hidden_dim * 3 + config.feature_hidden_dim
-        self.category_head = nn.Sequential(
-            nn.Linear(combined_dim, config.hidden_dim),
-            nn.ReLU(),
-            nn.Dropout(config.dropout),
-            nn.Linear(config.hidden_dim, 3),
+        self.binary_heads = nn.ModuleDict(
+            {
+                head_name: _build_binary_head(combined_dim, config.head_hidden_dim, config.dropout)
+                for head_name in self.main_binary_heads + self.auxiliary_binary_heads
+            }
         )
-        self.severity_head = nn.Sequential(
-            nn.Linear(combined_dim, config.hidden_dim),
-            nn.ReLU(),
-            nn.Dropout(config.dropout),
-            nn.Linear(config.hidden_dim, 4),
+        self.multiclass_heads = nn.ModuleDict(
+            {
+                "severity": _build_multiclass_head(
+                    combined_dim,
+                    config.head_hidden_dim,
+                    len(SEVERITY_LABELS),
+                    config.dropout,
+                )
+            }
         )
 
-    def forward(self, sample) -> tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, sample) -> GraphForwardOutput:
         node_states = self.node_embedding(sample.node_type_ids)
         for layer_index in range(self.config.relation_layers):
             messages = torch.zeros_like(node_states)
@@ -142,7 +156,15 @@ class RelationAwareGraphModel(nn.Module):
         encoded_features = self.feature_encoder(feature_vector)
 
         combined = torch.cat((anchor_state, graph_mean, graph_max, encoded_features), dim=0)
-        return self.category_head(combined), self.severity_head(combined)
+        binary_logits = {
+            head_name: head(combined).squeeze(-1)
+            for head_name, head in self.binary_heads.items()
+        }
+        multiclass_logits = {
+            head_name: head(combined)
+            for head_name, head in self.multiclass_heads.items()
+        }
+        return GraphForwardOutput(binary_logits=binary_logits, multiclass_logits=multiclass_logits)
 
 
 class LoadedGraphRiskModel:
@@ -179,6 +201,7 @@ class LoadedGraphRiskModel:
             categorical_cardinalities=[len(vocabulary.categorical_values[key]) for key in vocabulary.categorical_keys],
             numeric_dim=len(vocabulary.numeric_keys),
             boolean_dim=len(vocabulary.boolean_keys),
+            auxiliary_binary_heads=tuple(metadata.auxiliary_binary_heads),
             config=config,
         )
         model.load_state_dict(artifact["state_dict"])
@@ -196,17 +219,19 @@ class LoadedGraphRiskModel:
     def predict(self, graph: TransactionGraph, features: ScalarFeatureSet) -> GraphPredictionScores:
         encoded = encode_sample(graph, features, self.vocabulary, self.normalization)
         with torch.no_grad():
-            category_logits, severity_logits = self.model(encoded)
-        category_values = torch.sigmoid(category_logits).tolist()
+            outputs = self.model(encoded)
+        category_scores = {}
+        for label in MAIN_BINARY_HEADS:
+            if label not in outputs.binary_logits:
+                continue
+            category_scores[label] = round(float(torch.sigmoid(outputs.binary_logits[label]).item()), 6)
+        severity_logits = outputs.multiclass_logits["severity"]
         severity_values = torch.softmax(severity_logits, dim=0).tolist()
         return GraphPredictionScores(
-            category_scores={
-                label: round(float(score), 6)
-                for label, score in zip(("approval", "destination", "simulation"), category_values, strict=True)
-            },
+            category_scores=category_scores,
             severity_scores={
                 label: round(float(score), 6)
-                for label, score in zip(("low", "medium", "high", "critical"), severity_values, strict=True)
+                for label, score in zip(SEVERITY_LABELS, severity_values, strict=True)
             },
         )
 
@@ -234,4 +259,22 @@ def save_graph_model_artifact(
             "metrics": metrics,
         },
         artifact_path,
+    )
+
+
+def _build_binary_head(input_dim: int, hidden_dim: int, dropout: float) -> nn.Sequential:
+    return nn.Sequential(
+        nn.Linear(input_dim, hidden_dim),
+        nn.ReLU(),
+        nn.Dropout(dropout),
+        nn.Linear(hidden_dim, 1),
+    )
+
+
+def _build_multiclass_head(input_dim: int, hidden_dim: int, output_dim: int, dropout: float) -> nn.Sequential:
+    return nn.Sequential(
+        nn.Linear(input_dim, hidden_dim),
+        nn.ReLU(),
+        nn.Dropout(dropout),
+        nn.Linear(hidden_dim, output_dim),
     )

@@ -9,8 +9,9 @@
 当前仓库已经不是“只剩 handoff 的骨架版”，而是一个完成了 Student 2 集成的可运行版本。Student 2 在不破坏 Student 1 既有前后端接口的前提下，补齐了以下内容：
 
 - 基于当前 `TransactionRequest -> AnalysisResponse` 接口的图模型训练与推理链路
-- 可复现的训练数据生成脚本
+- 多数据集 adaptor、统一样本格式和 weighted dataloader
 - 模型评测与 metrics 导出
+- SwanLab 训练指标记录
 - 后端自动加载图模型并在失败时回退到 Student 1 的 heuristic fallback
 - 保持 `POST /api/v1/analyze` 的输入输出字段不变
 
@@ -49,23 +50,28 @@
 在项目根目录执行：
 
 ```bash
-python3 -m venv .venv
-.venv/bin/pip install -r backend/requirements.txt
+conda create -y -p .conda-envs/chainsentry python=3.12
+conda run -p .conda-envs/chainsentry python -m pip install -r backend/requirements.txt
 cd frontend
 npm install
 cd ..
 ```
 
-如果你没有创建 `.venv`，也可以把下面命令里的 `.venv/bin/python` 替换成 `python3`，前提是当前 Python 环境已经安装了依赖。
+如果你已经有现成的 Python 环境，也可以把下面命令里的 `.conda-envs/chainsentry/bin/python` 替换成你自己的解释器；但当前仓库默认按 `chainsentry` conda 环境记录和复现。
 
 ## 5. 训练图模型
 
 在项目根目录执行：
 
 ```bash
-PYTHONPATH=backend .venv/bin/python -m app.ml.training.train_graph_model \
+SWANLAB_API_KEY=your_key_here \
+PYTHONPATH=backend .conda-envs/chainsentry/bin/python -m app.ml.training.train_multidataset_model \
   --artifact-path backend/app/ml/artifacts/graph-model.pt \
-  --metrics-path backend/app/ml/artifacts/graph-model-metrics.json
+  --metrics-path backend/app/ml/artifacts/graph-model-metrics.json \
+  --epochs 18 \
+  --size-profile standard \
+  --enable-swanlab \
+  --swanlab-project chainsentry
 ```
 
 训练完成后会生成：
@@ -75,21 +81,24 @@ PYTHONPATH=backend .venv/bin/python -m app.ml.training.train_graph_model \
 
 说明：
 
-- 这个训练集是 Student 2 这次补的可复现 synthetic dataset，用来完成课程项目所要求的“图模型训练、评测、推理集成”闭环。
-- 标签来自当前 baseline detector 的 pseudo-label 规则，适合课程原型和 demo，不应当视为真实生产数据。
+- 当前主训练入口已经不是 synthetic 主训练集，而是多数据集训练：
+  - `forta-labelled-datasets`
+  - `eth-labels`
+  - `EtherScamDB`
+  - `PTXPhish`
+  - `raven-dataset`
+- 这些数据源并不共享同一种标签空间，因此系统先用 adaptor 把它们统一映射成 `TransactionGraph + ScalarFeatureSet`，再用 target mask 训练多头模型。
+- 这仍然是**弱监督 + shell transaction projection** 路线，不应被表述为生产级真实链上风控训练。
 
-当前一次完整训练后，默认 metrics 会写入 `backend/app/ml/artifacts/graph-model-metrics.json`。
+当前一次完整训练后，metrics 会写入 `backend/app/ml/artifacts/graph-model-metrics.json`，同时在 SwanLab 中记录：
 
-在当前仓库状态下，最新一版 metrics 是：
+- 每 epoch 总 loss
+- 各 head 的 loss
+- 各风险 head 的 precision / recall / F1 / ROC-AUC / AP
+- severity accuracy / macro F1 / per-class precision / recall / F1
+- train / val / test 各数据集样本量
 
-- dataset total: 637
-- train examples: 477
-- test examples: 160
-- approval F1: 0.7955
-- destination F1: 0.6667
-- simulation F1: 1.0000
-- severity accuracy: 0.9125
-- severity macro F1: 0.9135
+因此当前应以**同一次训练生成的 metrics JSON 和 SwanLab 看板**为准，而不是再引用旧 synthetic baseline 数字。
 
 ## 6. 启动后端
 
@@ -99,14 +108,14 @@ PYTHONPATH=backend .venv/bin/python -m app.ml.training.train_graph_model \
 
 ```bash
 CHAIN_SENTRY_PREDICTOR_BACKEND=graph-model \
-PYTHONPATH=backend .venv/bin/python -m uvicorn app.main:app --reload
+PYTHONPATH=backend .conda-envs/chainsentry/bin/python -m uvicorn app.main:app --reload
 ```
 
 如果你想强制切回 Student 1 的启发式版本：
 
 ```bash
 CHAIN_SENTRY_PREDICTOR_BACKEND=heuristic-fallback \
-PYTHONPATH=backend .venv/bin/python -m uvicorn app.main:app --reload
+PYTHONPATH=backend .conda-envs/chainsentry/bin/python -m uvicorn app.main:app --reload
 ```
 
 后端地址：
@@ -144,12 +153,12 @@ npm run dev
 2. 后端先走 Student 1 的 parser，把交易规范化。
 3. 后端构建 transaction-centered graph。
 4. 后端提取 scalar features。
-5. 图模型输出三类风险分数：
-   - `approval`
-   - `destination`
-   - `simulation`
-6. 系统把模型分数和 Student 1 的 heuristic findings 合并。
-7. 最终仍然返回原来的 risk card 结构。
+5. 图模型输出：
+   - 三个风险分数：`approval` / `destination` / `simulation`
+   - 一个严重度分布：`low` / `medium` / `high` / `critical`
+   - 可选辅助 head：`address_malicious` / `failure_aux`，但它们只用于训练
+6. 系统把模型输出和 Student 1 的 heuristic findings 合并。
+7. 后端再组装成最终的 risk card 响应结构。
 
 这意味着当前系统是一个更稳的 **hybrid model + rules** 方案，而不是把 Student 1 的逻辑全部删掉。
 
@@ -157,6 +166,7 @@ npm run dev
 
 返回格式保持不变，仍然包含：
 
+- `normalized_transaction`
 - `overall_severity`
 - `recommended_action`
 - `summary`
@@ -173,7 +183,7 @@ npm run dev
 后端测试：
 
 ```bash
-PYTHONPATH=backend .venv/bin/python -m pytest backend/tests -q
+PYTHONPATH=backend .conda-envs/chainsentry/bin/python -m pytest backend/tests -q
 ```
 
 前端构建：
@@ -187,7 +197,8 @@ npm run build
 
 当前版本是课程项目标准下的完整 Student 2 闭环，但仍有边界：
 
-- 训练数据目前是 synthetic + pseudo-label，不是真实链上标注集
+- 训练数据来自公开标签源 + shell transaction projection，不是端到端真实链上交易标注集
+- `severity` 主要由 PTXPhish 和高置信 benign shell 监督，不代表全量风险语义都已被充分标注
 - simulation 仍以 Student 1 的 baseline heuristic engine 为主，没有完全切到 Foundry trace
 - 这个图模型更适合课程演示和结构化评测，不是生产级安全模型
 

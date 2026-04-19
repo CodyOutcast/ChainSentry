@@ -50,7 +50,7 @@ def infer_method_name(request: TransactionRequest) -> str:
 
 
 def infer_transaction_kind(method_name: str, value_eth: float) -> TransactionKind:
-    if method_name in {"approve", "setapprovalforall", "increaseallowance"}:
+    if method_name in {"approve", "permit", "permit2", "setapprovalforall", "increaseallowance"}:
         return TransactionKind.approval
     if "grantrole" in method_name or "setoperator" in method_name or "authorize" in method_name:
         return TransactionKind.privilege
