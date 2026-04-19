@@ -36,26 +36,21 @@ Student 2 now owns and has delivered the following workstreams in this repo:
 
 • Local heterogeneous transaction graph design
 • Scalar feature extraction and sample vectorization
-• Synthetic dataset generation based on current supported risk families
-• Reproducible graph-model training and metrics export
+• Multi-dataset adaptor layer and unified sample format
+• Reproducible multi-dataset graph-model training, SwanLab logging, and metrics export
 • Saved artifact loading and graph-model inference inside the backend
 • Hybrid model-plus-rules finding generation
 • Updated Chinese documentation for setup, usage, and evaluation
 
 ## Current Metrics
 
-Using the default training command and current codebase, the latest saved metrics are:
+The current repository now trains through the multi-dataset path, and the exact numbers depend on the last completed run that wrote:
 
-• dataset total: 637
-• train examples: 477
-• test examples: 160
-• approval F1: 0.7955
-• destination F1: 0.6667
-• simulation F1: 1.0000
-• severity accuracy: 0.9125
-• severity macro F1: 0.9135
+• `backend/app/ml/artifacts/graph-model-metrics.json`
+• the paired SwanLab run for that training job
 
-These metrics come from the synthetic + pseudo-label training pipeline and should be presented as course-project evaluation results, not production claims.
+The historical synthetic baseline is only a legacy reference now.  
+For the current path, report the metrics JSON and SwanLab dashboard produced by `train_multidataset_model.py`.
 
 ## Recommended Graph ML Design
 
@@ -127,7 +122,12 @@ Key files:
 • `vectorization.py`
 • `model.py`
 • `inference.py`
-• `training/dataset.py`
+• `training/unified_sample.py`
+• `training/multi_dataset.py`
+• `training/adaptors/`
+• `training/external_datasets.py`
+• `training/dataset.py` (legacy synthetic helper, kept mainly for compatibility)
+• `training/train_multidataset_model.py`
 • `training/train_graph_model.py`
 
 Use them to inspect or extend:
@@ -238,7 +238,7 @@ The frontend includes these built-in demo scenarios:
 
 The core Student 2 deliverables are already present. Only optional extensions remain:
 
-1. Replace synthetic data with a stronger labeled dataset
+1. Replace more shell-style supervision with richer transaction-level labeled data
 2. Improve the simulation engine beyond heuristic effect templates
 3. Run a formal user study instead of only scenario-based evaluation
 4. Expand threat coverage beyond the current three risk families
@@ -248,8 +248,8 @@ The core Student 2 deliverables are already present. Only optional extensions re
 If the environment does not yet exist, recreate dependencies first:
 
 ```bash
-python3 -m venv .venv
-.venv/bin/pip install -r backend/requirements.txt
+conda create -y -p .conda-envs/chainsentry python=3.12
+conda run -p .conda-envs/chainsentry python -m pip install -r backend/requirements.txt
 cd frontend
 npm install
 ```
@@ -257,15 +257,17 @@ npm install
 Graph-model training:
 
 ```bash
-PYTHONPATH=backend python3 -m app.ml.training.train_graph_model \
+PYTHONPATH=backend .conda-envs/chainsentry/bin/python -m app.ml.training.train_multidataset_model \
   --artifact-path backend/app/ml/artifacts/graph-model.pt \
-  --metrics-path backend/app/ml/artifacts/graph-model-metrics.json
+  --metrics-path backend/app/ml/artifacts/graph-model-metrics.json \
+  --epochs 18 \
+  --size-profile standard
 ```
 
 Backend tests:
 
 ```bash
-PYTHONPATH=backend python3 -m pytest backend/tests -q
+PYTHONPATH=backend .conda-envs/chainsentry/bin/python -m pytest backend/tests -q
 ```
 
 Frontend build:
