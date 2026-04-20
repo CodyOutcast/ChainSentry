@@ -1,0 +1,74 @@
+Group Members:
+Yiheng Lu (123090391)
+Zhuokai Chen (123090057)
+1 Project Title and Background
+Project Title: ChainSentry: An Explainable Pre-Signature Risk Analysis System for Blockchain
+Transactions.
+Blockchain applications are growing quickly in finance, gaming, and digital identity, but ordinary
+users still struggle to understand what they are signing. A wallet confirmation often shows contract
+addresses, calldata, and gas details, yet these low-level fields do not clearly explain the real-world
+consequence of a transaction. This usability gap creates a major security risk: users may approve
+unlimited token spending, interact with phishing contracts, or execute operations that appear
+harmless but later enable asset theft.
+Current protection tools are useful but fragmented. Transaction simulation tools focus on likely
+state changes but may miss broader behavioral context. Address reputation tools provide historical
+signals but cannot fully explain the risk of a specific pending action. Static analyzers identify
+vulnerable code patterns but are difficult for non-experts to interpret. Therefore, there is a strong
+need for a user-facing system that combines multiple analysis methods and converts technical findings
+into understandable, decision-ready guidance.
+2 Problem Statement
+The core problem is that blockchain transaction security support is not aligned with real user
+decision-making. At the moment of signing, users need clear answers to three questions: What will
+happen? Why is it risky? What should I do? Existing tools usually answer only one part of this
+triad and often present results in formats intended for developers rather than end users.
+This mismatch leads to two practical issues. First, users may ignore warnings because they
+are too technical, too vague, or too late. Second, even security-aware users cannot easily compare
+the severity of different risks across transactions. As a result, the ecosystem lacks an explainable,
+pre-signature risk assessment workflow that is both technically grounded and understandable to
+non-specialists.
+3 Proposed Solution and Key Features
+We propose ChainSentry, an off-chain risk intelligence layer that intercepts pending transactions
+before signature and outputs a concise risk report with human-readable explanations.
+Key features include:
+• Pre-signature transaction assessment: evaluates destination, calldata, value transfer, and
+token approval behavior before execution.
+• Multi-source risk detection: combines static contract checks, transaction simulation, and
+learned graph-based risk scoring.
+• Explainable alerts: transforms raw findings into plain-language summaries of cause, potential
+impact, and recommended user action.
+1
+• Optional on-chain risk anchoring: stores hash-linked risk summaries in a lightweight
+registry contract for transparency and reuse.
+• User-friendly risk levels: provides consistent categories (e.g., low/medium/high/critical) to
+support rapid, informed decisions.
+4 Technical Approach and Preliminary System Design
+The preliminary architecture has four layers:
+(1) Input and Parsing Layer. A wallet-connected interface captures transaction fields and
+normalizes them into a structured request.
+(2) Analysis Engine. Static analysis (e.g., unsafe external calls, delegatecall misuse, unlimited
+approval patterns) is combined with dynamic simulation in a forked EVM environment to observe
+predicted state transitions, token allowance changes, and unexpected side effects.
+(3) Learning and Explanation Layer. Transaction entities are represented as a graph of
+addresses, contracts, and token flows. A graph-based model outputs a risk score, which is fused with
+rule/simulation signals. An explanation module then generates short natural-language justifications
+and recommendations.
+(4) Reporting and Registry Layer. The frontend presents a compact risk card before the
+user signs. Optionally, a smart contract records digest-level risk metadata to support auditability
+without exposing sensitive details.
+For implementation, we plan to use FastAPI/Python for backend orchestration, Foundry-based
+simulation for dynamic behavior, and a React + wallet SDK frontend for integration. The design is
+modular so each detector can be improved independently while preserving a stable user experience.
+5 Expected Contributions or Innovations
+This project is expected to contribute both practical value and research novelty:
+• User-centered security workflow: shifts blockchain risk detection from post-incident
+analysis to real-time, pre-signature prevention.
+• Explainability-first design: couples technical detection with interpretable outputs tailored
+to non-expert users.
+• Hybrid detection pipeline: demonstrates how static rules, dynamic simulation, and graph
+learning can be integrated into one decision framework.
+• Reusable risk knowledge layer: enables optional on-chain publication of verifiable risk
+summaries for ecosystem-wide reuse.
+• Feasible prototype path: provides a clear engineering roadmap for a two-person team to
+deliver a working end-to-end system.
+In short, ChainSentry aims to make blockchain interactions safer by giving users accurate, timely,
+and understandable risk intelligence exactly when decisions are made.
