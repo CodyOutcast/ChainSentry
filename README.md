@@ -9,9 +9,9 @@ It currently ships as a hybrid system:
 
 ## Project Structure
 
-• `backend/`: FastAPI service, heuristic detectors, graph-model training/inference pipeline, simulation prototype, and tests.
+• `backend/`: FastAPI service, heuristic detectors, packaged graph-model inference, simulation prototype, and tests.
 • `frontend/`: Vite React client, demo scenarios, wallet integration, and risk report UI.
-• `docs/`: API contract, Student 2 handoff, evaluation summary, and Chinese usage guides.
+• `docs/`: final report, demo guide, project proposal, and supplementary notes.
 • `info.md`: implementation plan and project reference.
 
 ## Final Project Direction
@@ -39,7 +39,9 @@ cd frontend
 npm install
 ```
 
-The Student 1 handoff intentionally excludes generated folders such as `.venv/`, `frontend/node_modules/`, and `frontend/dist/`. Recreate them locally using the commands above.
+The handoff intentionally excludes local dependency folders such as `.venv/` and `frontend/node_modules/`. The presentation package may include a prebuilt `frontend/dist/` bundle so the UI can be served on a fresh machine without rerunning the frontend build.
+
+This handoff keeps the runtime analysis path and the packaged graph-model artifacts, but it does not include the full training workspace or the raw external training corpora. That keeps the repository smaller and avoids exposing partial training code paths that are not needed for the demo or runtime analysis.
 
 ## Run The Backend
 
@@ -57,6 +59,8 @@ Backend URL:
 • Health check: `http://localhost:8000/health`
 • Analysis endpoint: `POST http://localhost:8000/api/v1/analyze`
 
+The packaged backend expects `backend/app/ml/artifacts/graph-model.pt`. If that artifact is missing, the backend will fall back to the heuristic predictor instead of trying to regenerate a model locally.
+
 ## Run The Frontend
 
 From the workspace root:
@@ -70,6 +74,49 @@ npm run dev
 Frontend URL:
 
 • `http://localhost:5173`
+
+## Presentation Frontend
+
+For the final presentation, the frontend can be shipped prebuilt from `frontend/dist/`.
+
+Build the presentation bundle:
+
+```bash
+cd frontend
+npm run build:presentation
+```
+
+Serve the prebuilt bundle on any machine with Python installed:
+
+```bash
+cd frontend
+npm run serve:presentation
+```
+
+That serves the static frontend from `http://localhost:4173` by default. The UI still expects the backend API to be reachable at `http://localhost:8000` unless you rebuild with a different `VITE_API_BASE_URL`.
+
+## One-Command Presentation Mode
+
+To copy this folder to another computer and run the demo with minimal setup, use the root launcher:
+
+```bash
+bash run-presentation.sh
+```
+
+What it does:
+
+- creates `.venv/` locally if it does not exist
+- attempts to install Python 3 automatically on common macOS and Linux setups if Python is missing
+- installs only the backend runtime dependencies from `backend/requirements-presentation.txt`
+- starts the FastAPI backend on `http://127.0.0.1:8000`
+- serves the prebuilt frontend bundle from `frontend/dist/` on `http://127.0.0.1:4173`
+
+What the target machine still needs:
+
+- permission to install Python if it is not already present
+- network access the first time, so `pip` can download the backend runtime packages
+
+After the first successful run on that machine, rerunning the same command will reuse the local `.venv/`.
 
 ## Validation Commands
 
@@ -86,18 +133,9 @@ cd frontend
 npm run build
 ```
 
-## Student 2 Handoff
+## Documentation
 
-See `docs/student2-handoff.md` for the integration guide and `docs/api-contract.md` for the request and response shapes.
-
-## Student 2 Usage
-
-For the Student 2 graph-model workflow and Chinese usage notes, see `docs/student2-使用说明.md`.
-
-## End-User Usage
-
-For a clear Chinese guide to running the app and reading the risk report, see `docs/用户使用说明.md`.
-
-## Evaluation Summary
-
-For the final scope, metrics, limitations, and response to teacher feedback, see `docs/评估与交付总结.md`.
+- `docs/ChainSentry_Project_Report.tex`: final project report.
+- `docs/demo-scenarios-guide.md`: presentation speaking guide for the shipped demo scenarios.
+- `docs/模型输入输出与5个案例说明.md`: concise Chinese note on model I/O and the current five demo cases.
+- `docs/project proposal.txt`: original proposal text kept for reference.

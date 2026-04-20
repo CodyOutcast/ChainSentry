@@ -56,6 +56,56 @@ def test_standard_transfer_returns_low_risk() -> None:
     assert payload["findings"] == []
 
 
+def test_large_approval_to_benign_router_returns_medium_risk() -> None:
+    response = client.post(
+        "/api/v1/analyze",
+        json={
+            "chain_id": 1,
+            "from_address": "0x1111111111111111111111111111111111111111",
+            "to_address": "0x5555555555555555555555555555555555555555",
+            "method_name": "approve",
+            "token_symbol": "USDC",
+            "approval_amount": 50000,
+            "spender_address": "0x5555555555555555555555555555555555555555",
+            "contract_name": "Demo Router",
+            "simulation_profile": "none",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+
+    assert payload["overall_severity"] == "medium"
+    assert payload["recommended_action"] == "inspect_further"
+    finding_ids = {finding["id"] for finding in payload["findings"]}
+    assert "approval-large" in finding_ids
+    assert "simulation-allowance-grant" in finding_ids
+
+
+def test_operator_control_case_returns_critical_risk() -> None:
+    response = client.post(
+        "/api/v1/analyze",
+        json={
+            "chain_id": 1,
+            "from_address": "0x1111111111111111111111111111111111111111",
+            "to_address": "0x6666666666666666666666666666666666666666",
+            "method_name": "setApprovalForAll",
+            "spender_address": "0x6666666666666666666666666666666666666666",
+            "contract_name": "Collection Manager",
+            "simulation_profile": "allowance_drain",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+
+    assert payload["overall_severity"] == "critical"
+    assert payload["recommended_action"] == "reject"
+    finding_ids = {finding["id"] for finding in payload["findings"]}
+    assert "simulation-operator-control" in finding_ids
+    assert "simulation-unexpected-outflow" in finding_ids
+
+
 def test_privilege_escalation_returns_high_risk() -> None:
     response = client.post(
         "/api/v1/analyze",

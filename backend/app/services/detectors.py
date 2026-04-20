@@ -7,11 +7,18 @@ from app.config import LARGE_APPROVAL_THRESHOLD, UNLIMITED_APPROVAL_THRESHOLD
 from app.content import explanation_templates
 from app.models import EffectType, NormalizedTransaction, RiskFinding, Severity, SimulationSummary
 
+
 DATA_FILE = Path(__file__).resolve().parent.parent / "data" / "flagged_contracts.json"
 
 
-with DATA_FILE.open("r", encoding="utf-8") as file_handle:
-    FLAGGED_CONTRACTS = json.load(file_handle)
+def _load_flagged_contracts() -> dict[str, dict[str, dict[str, str]]]:
+    if not DATA_FILE.exists():
+        return {}
+    with DATA_FILE.open("r", encoding="utf-8") as file_handle:
+        return json.load(file_handle)
+
+
+FLAGGED_CONTRACTS = _load_flagged_contracts()
 
 
 def run_detectors(transaction: NormalizedTransaction, simulation: SimulationSummary) -> list[RiskFinding]:
@@ -76,7 +83,6 @@ def _check_flagged_destinations(transaction: NormalizedTransaction) -> list[Risk
 def _lookup_flagged_contract(chain_id: int, address: str) -> dict[str, str] | None:
     chain_table = FLAGGED_CONTRACTS.get(str(chain_id), {})
     return chain_table.get(address)
-
 
 def _check_simulation(transaction: NormalizedTransaction, simulation: SimulationSummary) -> list[RiskFinding]:
     findings: list[RiskFinding] = []

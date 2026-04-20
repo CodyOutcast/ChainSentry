@@ -10,7 +10,6 @@ from app.content import explanation_templates
 from app.ml.features import ScalarFeatureSet, extract_scalar_features
 from app.ml.graph_builder import TransactionGraph, build_transaction_graph
 from app.ml.model import GraphPredictionScores, LoadedGraphRiskModel
-from app.ml.training import bootstrap_graph_model_artifacts
 from app.models import (
     NormalizedTransaction,
     RiskCategory,
@@ -67,12 +66,8 @@ class GraphModelPredictor:
 
     def __init__(self) -> None:
         if not GRAPH_MODEL_ARTIFACT_PATH.exists():
-            bootstrap_graph_model_artifacts(GRAPH_MODEL_ARTIFACT_PATH)
-        try:
-            self._model = LoadedGraphRiskModel.load(GRAPH_MODEL_ARTIFACT_PATH)
-        except Exception:
-            bootstrap_graph_model_artifacts(GRAPH_MODEL_ARTIFACT_PATH)
-            self._model = LoadedGraphRiskModel.load(GRAPH_MODEL_ARTIFACT_PATH)
+            raise FileNotFoundError(f"Graph model artifact not found: {GRAPH_MODEL_ARTIFACT_PATH}")
+        self._model = LoadedGraphRiskModel.load(GRAPH_MODEL_ARTIFACT_PATH)
 
     def predict(
         self,
