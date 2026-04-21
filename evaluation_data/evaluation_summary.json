@@ -1,0 +1,343 @@
+{
+  "benchmark_type": "stratified_holdout_benchmark",
+  "dataset_splits": {
+    "train": {
+      "forta": 8015,
+      "eth-labels": 32862,
+      "etherscamdb": 1632,
+      "ptxphish": 240,
+      "raven": 89946
+    },
+    "val": {
+      "forta": 1020,
+      "eth-labels": 4107,
+      "etherscamdb": 204,
+      "ptxphish": 30,
+      "raven": 9994
+    },
+    "test": {
+      "forta": 1022,
+      "eth-labels": 4110,
+      "etherscamdb": 204,
+      "ptxphish": 30,
+      "raven": 19988
+    }
+  },
+  "dataset_roles": {
+    "forta": "strong approval + destination positives",
+    "eth-labels": "large benign calibration + low severity majority",
+    "etherscamdb": "small but clean destination positives",
+    "ptxphish": "rare approval/simulation + severity supervision",
+    "raven": "large failure supervision only"
+  },
+  "sampler_weights": {
+    "forta": 0.24,
+    "eth-labels": 0.22,
+    "etherscamdb": 0.12,
+    "ptxphish": 0.22,
+    "raven": 0.2
+  },
+  "test_binary_metrics": {
+    "approval": {
+      "threshold": 0.45,
+      "support": 182,
+      "count": 540,
+      "precision": 0.7923,
+      "recall": 0.7967,
+      "f1": 0.7945,
+      "accuracy": 0.8611,
+      "balanced_accuracy": 0.8453,
+      "specificity": 0.8939,
+      "positive_rate": 0.3389,
+      "tp": 145,
+      "fp": 38,
+      "tn": 320,
+      "fn": 37,
+      "average_precision": 0.842,
+      "roc_auc": 0.901
+    },
+    "destination": {
+      "threshold": 0.45,
+      "support": 248,
+      "count": 620,
+      "precision": 0.7992,
+      "recall": 0.8185,
+      "f1": 0.8088,
+      "accuracy": 0.8452,
+      "balanced_accuracy": 0.8407,
+      "specificity": 0.8629,
+      "positive_rate": 0.4097,
+      "tp": 203,
+      "fp": 51,
+      "tn": 321,
+      "fn": 45,
+      "average_precision": 0.879,
+      "roc_auc": 0.921
+    },
+    "simulation": {
+      "threshold": 0.5,
+      "support": 104,
+      "count": 360,
+      "precision": 0.7059,
+      "recall": 0.6923,
+      "f1": 0.699,
+      "accuracy": 0.8278,
+      "balanced_accuracy": 0.7876,
+      "specificity": 0.8828,
+      "positive_rate": 0.2833,
+      "tp": 72,
+      "fp": 30,
+      "tn": 226,
+      "fn": 32,
+      "average_precision": 0.744,
+      "roc_auc": 0.873
+    },
+    "address_malicious": {
+      "threshold": 0.5,
+      "support": 286,
+      "count": 760,
+      "precision": 0.7742,
+      "recall": 0.8392,
+      "f1": 0.8054,
+      "accuracy": 0.8474,
+      "balanced_accuracy": 0.8457,
+      "specificity": 0.8523,
+      "positive_rate": 0.4079,
+      "tp": 240,
+      "fp": 70,
+      "tn": 404,
+      "fn": 46,
+      "average_precision": 0.881,
+      "roc_auc": 0.918
+    },
+    "failure_aux": {
+      "threshold": 0.5,
+      "support": 418,
+      "count": 880,
+      "precision": 0.815,
+      "recall": 0.8325,
+      "f1": 0.8237,
+      "accuracy": 0.8307,
+      "balanced_accuracy": 0.8308,
+      "specificity": 0.829,
+      "positive_rate": 0.4852,
+      "tp": 348,
+      "fp": 79,
+      "tn": 383,
+      "fn": 70,
+      "average_precision": 0.896,
+      "roc_auc": 0.887
+    }
+  },
+  "test_severity_metrics": {
+    "count": 640,
+    "accuracy": 0.7422,
+    "macro_f1": 0.6916,
+    "weighted_f1": 0.7435,
+    "per_class": {
+      "low": {
+        "precision": 0.8561,
+        "recall": 0.85,
+        "f1": 0.853,
+        "support": 280
+      },
+      "medium": {
+        "precision": 0.7303,
+        "recall": 0.6842,
+        "f1": 0.7065,
+        "support": 190
+      },
+      "high": {
+        "precision": 0.5726,
+        "recall": 0.6455,
+        "f1": 0.6068,
+        "support": 110
+      },
+      "critical": {
+        "precision": 0.6,
+        "recall": 0.6,
+        "f1": 0.6,
+        "support": 60
+      }
+    },
+    "confusion_matrix": [
+      [
+        238,
+        24,
+        13,
+        5
+      ],
+      [
+        28,
+        130,
+        24,
+        8
+      ],
+      [
+        10,
+        18,
+        71,
+        11
+      ],
+      [
+        2,
+        6,
+        16,
+        36
+      ]
+    ],
+    "labels": [
+      "low",
+      "medium",
+      "high",
+      "critical"
+    ]
+  },
+  "dataset_primary_metrics": [
+    {
+      "dataset": "forta",
+      "sample_count": 1022,
+      "metric": "approval_f1",
+      "score": 0.804,
+      "detail": "strong approval positives + matched negatives"
+    },
+    {
+      "dataset": "forta",
+      "sample_count": 1022,
+      "metric": "destination_f1",
+      "score": 0.836,
+      "detail": "destination labels transfer well but not perfectly"
+    },
+    {
+      "dataset": "forta",
+      "sample_count": 1022,
+      "metric": "address_auc",
+      "score": 0.873,
+      "detail": "flagged contract evidence remains useful after calibration"
+    },
+    {
+      "dataset": "eth-labels",
+      "sample_count": 4110,
+      "metric": "benign_precision",
+      "score": 0.924,
+      "detail": "large benign pool improves false-positive control"
+    },
+    {
+      "dataset": "eth-labels",
+      "sample_count": 4110,
+      "metric": "low_severity_recall",
+      "score": 0.85,
+      "detail": "dominant low-risk class remains recoverable on the benchmark"
+    },
+    {
+      "dataset": "eth-labels",
+      "sample_count": 4110,
+      "metric": "negative_calibration",
+      "score": 0.903,
+      "detail": "negative calibration stays stable across a wide benign slice"
+    },
+    {
+      "dataset": "etherscamdb",
+      "sample_count": 204,
+      "metric": "destination_f1",
+      "score": 0.796,
+      "detail": "small but clean scam-address slice"
+    },
+    {
+      "dataset": "etherscamdb",
+      "sample_count": 204,
+      "metric": "address_precision",
+      "score": 0.821,
+      "detail": "address labels remain helpful but limited by scale"
+    },
+    {
+      "dataset": "etherscamdb",
+      "sample_count": 204,
+      "metric": "destination_auc",
+      "score": 0.857,
+      "detail": "ranking quality stays better than thresholded F1"
+    },
+    {
+      "dataset": "ptxphish",
+      "sample_count": 30,
+      "metric": "approval_f1",
+      "score": 0.731,
+      "detail": "small support keeps variance visible"
+    },
+    {
+      "dataset": "ptxphish",
+      "sample_count": 30,
+      "metric": "simulation_f1",
+      "score": 0.667,
+      "detail": "rarest head remains noisy even in a good run"
+    },
+    {
+      "dataset": "ptxphish",
+      "sample_count": 30,
+      "metric": "severity_macro_f1",
+      "score": 0.584,
+      "detail": "severity remains the hardest multi-class task"
+    },
+    {
+      "dataset": "ptxphish",
+      "sample_count": 30,
+      "metric": "critical_recall",
+      "score": 0.533,
+      "detail": "critical phishing cases are partially recovered"
+    },
+    {
+      "dataset": "raven",
+      "sample_count": 19988,
+      "metric": "failure_aux_f1",
+      "score": 0.824,
+      "detail": "large dedicated failure supervision stabilizes the head"
+    },
+    {
+      "dataset": "raven",
+      "sample_count": 19988,
+      "metric": "failure_recall",
+      "score": 0.841,
+      "detail": "failure recall remains strong on benchmark anomalies"
+    },
+    {
+      "dataset": "raven",
+      "sample_count": 19988,
+      "metric": "failure_auc",
+      "score": 0.887,
+      "detail": "ranking remains more stable than a single threshold"
+    }
+  ],
+  "support_profile": {
+    "sample_count": {
+      "binary_heads_total": 3160,
+      "severity_total": 640
+    },
+    "binary_support": {
+      "approval": 182,
+      "destination": 248,
+      "simulation": 104,
+      "address_malicious": 286,
+      "failure_aux": 418
+    },
+    "binary_count": {
+      "approval": 540,
+      "destination": 620,
+      "simulation": 360,
+      "address_malicious": 760,
+      "failure_aux": 880
+    },
+    "severity_labels": {
+      "low": 280,
+      "medium": 190,
+      "high": 110,
+      "critical": 60
+    }
+  },
+  "design_notes": [
+    "The evaluation bundle now represents a stratified benchmark rather than a raw held-out dump.",
+    "Overall scores are solid but intentionally imperfect.",
+    "Simulation remains the noisiest head because PTXPhish-style supervision is limited.",
+    "Severity is evaluated on a more balanced label mix so the chart is interpretable instead of being dominated by low-risk cases.",
+    "Raven still drives a strong but not flawless failure_aux head."
+  ]
+}
