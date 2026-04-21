@@ -1,0 +1,6 @@
+dataset,sample_count,loss_total,severity_accuracy,severity_macro_f1,approval_f1,approval_accuracy,approval_precision,approval_recall,approval_support,destination_f1,destination_accuracy,destination_precision,destination_recall,destination_support,simulation_f1,simulation_accuracy,simulation_precision,simulation_recall,simulation_support,address_malicious_f1,address_malicious_accuracy,address_malicious_precision,address_malicious_recall,address_malicious_support,failure_aux_f1,failure_aux_accuracy,failure_aux_precision,failure_aux_recall,failure_aux_support
+eth-labels,4110,0.544044,0.3333,0.25,0.0,0.0,0.0,0.0,0,0.0,0.0,0.0,0.0,0,0.0,1.0,0.0,0.0,0,0.0,1.0,0.0,0.0,0,0.0,1.0,0.0,0.0,0
+etherscamdb,204,0.1036,,,,,,,0,1.0,1.0,1.0,1.0,204,,,,,0,1.0,1.0,1.0,1.0,204,0.0,1.0,0.0,0.0,0
+forta,1022,0.129798,,,1.0,1.0,1.0,1.0,280,1.0,1.0,1.0,1.0,742,,,,,0,1.0,1.0,1.0,1.0,1022,0.0,1.0,0.0,0.0,0
+ptxphish,30,0.214229,0.9091,0.4762,1.0,1.0,1.0,1.0,14,1.0,1.0,1.0,1.0,8,1.0,1.0,1.0,1.0,13,1.0,1.0,1.0,1.0,30,0.0,1.0,0.0,0.0,0
+raven,19988,0.991457,,,,,,,0,,,,,0,,,,,0,,,,,0,0.0,0.0,0.0,0.0,19988

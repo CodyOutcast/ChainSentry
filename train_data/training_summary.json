@@ -1,0 +1,57 @@
+{
+  "epochs": 15,
+  "train_active_samples": 132695,
+  "best_epoch_by_val_loss": 15,
+  "best_epoch_by_val_severity_macro_f1": 15,
+  "dataset_splits": {
+    "train": {
+      "forta": 8015,
+      "eth-labels": 32862,
+      "etherscamdb": 1632,
+      "ptxphish": 240,
+      "raven": 89946
+    },
+    "val": {
+      "forta": 1020,
+      "eth-labels": 4107,
+      "etherscamdb": 204,
+      "ptxphish": 30,
+      "raven": 9994
+    },
+    "test": {
+      "forta": 1022,
+      "eth-labels": 4110,
+      "etherscamdb": 204,
+      "ptxphish": 30,
+      "raven": 19988
+    }
+  },
+  "sampler_weights": {
+    "forta": 0.24,
+    "eth-labels": 0.22,
+    "etherscamdb": 0.12,
+    "ptxphish": 0.22,
+    "raven": 0.2
+  },
+  "train_target_coverage": {
+    "approval": 13147,
+    "destination": 18562,
+    "simulation": 11073,
+    "address_malicious": 42749,
+    "failure_aux": 132695,
+    "severity": 33051
+  },
+  "dataset_roles": {
+    "forta": "strong approval + destination positives",
+    "eth-labels": "large benign calibration + low severity majority",
+    "etherscamdb": "small but clean destination positives",
+    "ptxphish": "rare approval/simulation + severity supervision",
+    "raven": "large failure supervision only"
+  },
+  "design_notes": [
+    "All monitoring plots share the same 15-epoch horizon.",
+    "Binary heads with stronger label support converge earlier.",
+    "Simulation and severity remain noisier because PTXPhish is small and severe classes are rare.",
+    "Failure supervision is stable because Raven is large and dedicated to failure_aux."
+  ]
+}

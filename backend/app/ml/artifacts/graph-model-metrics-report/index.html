@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>ChainSentry Training Report</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 32px; color: #1f2937; }
+    table { border-collapse: collapse; margin-bottom: 24px; }
+    th, td { border: 1px solid #d1d5db; padding: 8px 12px; text-align: left; }
+    img { max-width: 100%; border: 1px solid #e5e7eb; margin-bottom: 24px; }
+    h1, h2 { margin: 0 0 12px; }
+    section { margin-bottom: 28px; }
+  </style>
+</head>
+<body>
+  <h1>ChainSentry Local Training Report</h1>
+  <section>
+    <h2>Summary</h2>
+    <table><tr><th>Size profile</th><td>max</td></tr><tr><th>Training duration (s)</th><td>5198.8801</td></tr><tr><th>Severity accuracy</th><td>0.3364</td></tr><tr><th>Severity macro F1</th><td>0.1715</td></tr><tr><th>Log path</th><td>/mnt/data3/luyiheng/ChainSentry/backend/app/ml/artifacts/graph-model-metrics-training.log</td></tr><tr><th>JSONL log path</th><td>/mnt/data3/luyiheng/ChainSentry/backend/app/ml/artifacts/graph-model-metrics-training.jsonl</td></tr></table>
+  </section>
+  <section>
+    <h2>Artifacts</h2>
+    <ul><li><a href='history.csv'>History CSV</a></li><li><a href='dataset_counts.csv'>Dataset counts CSV</a></li><li><a href='validation_by_dataset.csv'>Validation-by-dataset CSV</a></li><li><a href='test_by_dataset.csv'>Test-by-dataset CSV</a></li><li><a href='summary.json'>Summary JSON</a></li></ul>
+  </section>
+  <section><h2>Training curves</h2><img src='training_curves.png' alt='Training curves'></section><section><h2>Dataset distribution</h2><img src='dataset_distribution.png' alt='Dataset distribution'></section><section><h2>Overall test metrics</h2><img src='overall_test_metrics.png' alt='Overall test metrics'></section><section><h2>Test dataset heatmap</h2><img src='test_dataset_heatmap.png' alt='Test dataset heatmap'></section><section><h2>Validation dataset heatmap</h2><img src='validation_dataset_heatmap.png' alt='Validation dataset heatmap'></section>
+</body>
+</html>

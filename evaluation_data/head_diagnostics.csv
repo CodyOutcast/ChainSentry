@@ -1,0 +1,11 @@
+split,head,f1,average_precision,roc_auc,balanced_accuracy,support,count
+val,approval,0.8154,0.861,0.912,0.8586,184,540
+val,destination,0.8317,0.892,0.931,0.8592,250,620
+val,simulation,0.7358,0.781,0.887,0.8095,108,360
+val,address_malicious,0.8493,0.905,0.939,0.8787,290,760
+val,failure_aux,0.8471,0.914,0.901,0.8525,420,880
+test,approval,0.7945,0.842,0.901,0.8453,182,540
+test,destination,0.8088,0.879,0.921,0.8407,248,620
+test,simulation,0.699,0.744,0.873,0.7876,104,360
+test,address_malicious,0.8054,0.881,0.918,0.8457,286,760
+test,failure_aux,0.8237,0.896,0.887,0.8308,418,880

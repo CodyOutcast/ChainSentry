@@ -1,0 +1,16 @@
+split,dataset,count
+train,forta,8015
+train,eth-labels,32862
+train,etherscamdb,1632
+train,ptxphish,240
+train,raven,89946
+val,forta,1020
+val,eth-labels,4107
+val,etherscamdb,204
+val,ptxphish,30
+val,raven,9994
+test,forta,1022
+test,eth-labels,4110
+test,etherscamdb,204
+test,ptxphish,30
+test,raven,19988

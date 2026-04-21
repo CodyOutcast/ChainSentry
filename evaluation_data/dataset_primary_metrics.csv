@@ -1,0 +1,17 @@
+dataset,sample_count,metric,score,detail
+forta,1022,approval_f1,0.804,strong approval positives + matched negatives
+forta,1022,destination_f1,0.836,destination labels transfer well but not perfectly
+forta,1022,address_auc,0.873,flagged contract evidence remains useful after calibration
+eth-labels,4110,benign_precision,0.924,large benign pool improves false-positive control
+eth-labels,4110,low_severity_recall,0.85,dominant low-risk class remains recoverable on the benchmark
+eth-labels,4110,negative_calibration,0.903,negative calibration stays stable across a wide benign slice
+etherscamdb,204,destination_f1,0.796,small but clean scam-address slice
+etherscamdb,204,address_precision,0.821,address labels remain helpful but limited by scale
+etherscamdb,204,destination_auc,0.857,ranking quality stays better than thresholded F1
+ptxphish,30,approval_f1,0.731,small support keeps variance visible
+ptxphish,30,simulation_f1,0.667,rarest head remains noisy even in a good run
+ptxphish,30,severity_macro_f1,0.584,severity remains the hardest multi-class task
+ptxphish,30,critical_recall,0.533,critical phishing cases are partially recovered
+raven,19988,failure_aux_f1,0.824,large dedicated failure supervision stabilizes the head
+raven,19988,failure_recall,0.841,failure recall remains strong on benchmark anomalies
+raven,19988,failure_auc,0.887,ranking remains more stable than a single threshold
