@@ -5,6 +5,7 @@ import inspect
 import json
 import os
 import time
+from datetime import datetime, timezone
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -14,6 +15,8 @@ import torch
 from sklearn.metrics import (
     accuracy_score,
     average_precision_score,
+    balanced_accuracy_score,
+    confusion_matrix,
     f1_score,
     precision_recall_fscore_support,
     roc_auc_score,
@@ -35,6 +38,7 @@ from app.ml.training.multi_dataset import (
     build_default_adaptors,
     build_split_dataset,
 )
+from app.ml.training.local_report import generate_local_training_report
 from app.ml.training.unified_sample import AUXILIARY_BINARY_HEADS, BINARY_HEADS, UnifiedTrainingSample
 from app.ml.vectorization import build_feature_vocabulary, encode_sample, fit_normalization
 
@@ -131,6 +135,49 @@ class SwanLabLogger:
             self._module.finish()
 
 
+class TrainingRunLogger:
+    def __init__(
+        self,
+        *,
+        text_log_path: Path | None,
+        jsonl_log_path: Path | None,
+    ) -> None:
+        self.text_log_path = text_log_path
+        self.jsonl_log_path = jsonl_log_path
+        for path in (text_log_path, jsonl_log_path):
+            if path is None:
+                continue
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("", encoding="utf-8")
+
+    def log_text(self, message: str) -> None:
+        timestamp = self._timestamp()
+        line = f"[{timestamp}] {message}"
+        print(line, flush=True)
+        if self.text_log_path is not None:
+            with self.text_log_path.open("a", encoding="utf-8") as file_handle:
+                file_handle.write(line + "\n")
+
+    def log_event(self, event: str, payload: dict[str, Any]) -> None:
+        record = {
+            "timestamp": self._timestamp(),
+            "event": event,
+            "payload": payload,
+        }
+        encoded = json.dumps(record, ensure_ascii=False, sort_keys=True)
+        print(encoded, flush=True)
+        if self.text_log_path is not None:
+            with self.text_log_path.open("a", encoding="utf-8") as file_handle:
+                file_handle.write(encoded + "\n")
+        if self.jsonl_log_path is not None:
+            with self.jsonl_log_path.open("a", encoding="utf-8") as file_handle:
+                file_handle.write(encoded + "\n")
+
+    @staticmethod
+    def _timestamp() -> str:
+        return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
 def train_multidataset_model_artifact(
     artifact_path: Path,
     metrics_path: Path | None = None,
@@ -142,10 +189,42 @@ def train_multidataset_model_artifact(
     learning_rate: float = 3e-4,
     weight_decay: float = 1e-4,
     dataset_size: int | None = None,
+    train_samples_per_epoch: int | None = None,
     swanlab_project: str | None = None,
     swanlab_run_name: str | None = None,
     enable_swanlab: bool = False,
+    log_path: Path | None = None,
+    jsonl_log_path: Path | None = None,
+    report_dir: Path | None = None,
 ) -> dict[str, object]:
+    metrics_output_path = metrics_path or GRAPH_MODEL_METRICS_PATH
+    resolved_log_path, resolved_jsonl_log_path = _resolve_log_paths(
+        metrics_output_path=metrics_output_path,
+        log_path=log_path,
+        jsonl_log_path=jsonl_log_path,
+    )
+    resolved_report_dir = report_dir or metrics_output_path.with_name(f"{metrics_output_path.stem}-report")
+    run_logger = TrainingRunLogger(
+        text_log_path=resolved_log_path,
+        jsonl_log_path=resolved_jsonl_log_path,
+    )
+    run_logger.log_text("Initializing ChainSentry multi-dataset training run.")
+    run_logger.log_event(
+        "run_initializing",
+        {
+            "artifact_path": str(artifact_path),
+            "metrics_path": str(metrics_output_path),
+            "log_path": str(resolved_log_path),
+            "jsonl_log_path": str(resolved_jsonl_log_path),
+            "report_dir": str(resolved_report_dir),
+            "seed": seed,
+            "epochs": epochs,
+            "size_profile": size_profile,
+            "dataset_size": dataset_size,
+            "train_samples_per_epoch": train_samples_per_epoch,
+            "enable_swanlab": enable_swanlab,
+        },
+    )
     torch.set_num_threads(1)
     try:
         torch.set_num_interop_threads(1)
@@ -161,9 +240,11 @@ def train_multidataset_model_artifact(
         batch_size=batch_size,
         learning_rate=learning_rate,
         weight_decay=weight_decay,
+        train_samples_per_epoch=train_samples_per_epoch,
         dataset_weights=DEFAULT_DATASET_WEIGHTS,
         binary_loss_weights=DEFAULT_BINARY_LOSS_WEIGHTS,
     )
+    run_started_at = time.perf_counter()
 
     adaptors = build_default_adaptors()
     train_dataset = build_split_dataset(split="train", adaptors=adaptors, limits=size_limits["train"], seed=seed)
@@ -223,7 +304,24 @@ def train_multidataset_model_artifact(
             "binary_loss_weights": train_config.binary_loss_weights or DEFAULT_BINARY_LOSS_WEIGHTS,
         },
     )
-    _log_dataset_summary(logger, train_dataset, val_dataset, test_dataset)
+    _log_run_start(
+        run_logger=run_logger,
+        artifact_path=artifact_path,
+        metrics_path=metrics_output_path,
+        train_config=train_config,
+        size_profile=size_profile,
+        size_limits=size_limits,
+        train_dataset=train_dataset,
+        val_dataset=val_dataset,
+        test_dataset=test_dataset,
+        log_path=resolved_log_path,
+        jsonl_log_path=resolved_jsonl_log_path,
+        report_dir=resolved_report_dir,
+        swanlab_enabled=logger.enabled,
+    )
+    dataset_summary_payload = _build_dataset_summary_payload(train_dataset, val_dataset, test_dataset)
+    logger.log(dataset_summary_payload)
+    run_logger.log_event("dataset_summary", dataset_summary_payload)
 
     history: list[dict[str, Any]] = []
     for epoch in range(1, epochs + 1):
@@ -259,6 +357,8 @@ def train_multidataset_model_artifact(
         }
         history.append(epoch_log)
         logger.log(epoch_log)
+        run_logger.log_text(_summarize_epoch_log(epoch_log))
+        run_logger.log_event("epoch_end", epoch_log)
 
     val_predictions = collect_predictions(
         model=model,
@@ -285,13 +385,40 @@ def train_multidataset_model_artifact(
         severity_criterion=severity_criterion,
         binary_thresholds=thresholds,
     )
-    logger.log(
-        {
-            "epoch": epochs,
-            **_prefix_metrics("final_val", final_val_metrics["scalar_metrics"]),
-            **_prefix_metrics("final_test", final_test_metrics["scalar_metrics"]),
-        }
+    final_val_by_dataset = evaluate_by_dataset(
+        model=model,
+        dataset=val_dataset,
+        batch_size=batch_size,
+        vocabulary=vocabulary,
+        normalization=normalization,
+        binary_criteria=binary_criteria,
+        severity_criterion=severity_criterion,
+        binary_thresholds=thresholds,
     )
+    final_test_by_dataset = evaluate_by_dataset(
+        model=model,
+        dataset=test_dataset,
+        batch_size=batch_size,
+        vocabulary=vocabulary,
+        normalization=normalization,
+        binary_criteria=binary_criteria,
+        severity_criterion=severity_criterion,
+        binary_thresholds=thresholds,
+    )
+    final_payload = {
+        "epoch": epochs,
+        **_prefix_metrics("final_val", final_val_metrics["scalar_metrics"]),
+        **_prefix_metrics("final_test", final_test_metrics["scalar_metrics"]),
+        **_flatten_dataset_scalar_metrics("final_val_by_dataset", final_val_by_dataset),
+        **_flatten_dataset_scalar_metrics("final_test_by_dataset", final_test_by_dataset),
+    }
+    logger.log(
+        final_payload
+    )
+    run_logger.log_text(_summarize_final_metrics(final_val_metrics, final_test_metrics))
+    run_logger.log_event("final_metrics", final_payload)
+    run_logger.log_event("final_val_by_dataset", final_val_by_dataset)
+    run_logger.log_event("final_test_by_dataset", final_test_by_dataset)
     logger.finish()
 
     metadata = GraphModelMetadata(
@@ -322,14 +449,22 @@ def train_multidataset_model_artifact(
         "size_limits": size_limits,
         "thresholds": thresholds,
         "history": history,
+        "log_path": str(resolved_log_path),
+        "jsonl_log_path": str(resolved_jsonl_log_path),
+        "report_dir": str(resolved_report_dir),
+        "training_duration_seconds": round(time.perf_counter() - run_started_at, 4),
         "validation_metrics": final_val_metrics,
+        "validation_by_dataset": final_val_by_dataset,
         "test_metrics": final_test_metrics,
+        "test_by_dataset": final_test_by_dataset,
         "category_metrics": final_test_metrics["binary_metrics"]["main"],
         "auxiliary_metrics": final_test_metrics["binary_metrics"]["auxiliary"],
         "severity_metrics": final_test_metrics["multiclass_metrics"]["severity"],
         "severity_accuracy": final_test_metrics["multiclass_metrics"]["severity"]["accuracy"],
         "severity_macro_f1": final_test_metrics["multiclass_metrics"]["severity"]["macro_f1"],
     }
+    report_files = generate_local_training_report(metrics=metrics, report_dir=resolved_report_dir)
+    metrics["report_files"] = report_files
     save_graph_model_artifact(
         artifact_path=artifact_path,
         metadata=metadata,
@@ -340,9 +475,11 @@ def train_multidataset_model_artifact(
         thresholds=thresholds,
         metrics=metrics,
     )
-    metrics_output_path = metrics_path or GRAPH_MODEL_METRICS_PATH
     metrics_output_path.parent.mkdir(parents=True, exist_ok=True)
     metrics_output_path.write_text(json.dumps(metrics, indent=2), encoding="utf-8")
+    run_logger.log_text(f"Saved metrics to {metrics_output_path}")
+    run_logger.log_text(f"Saved artifact to {artifact_path}")
+    run_logger.log_text(f"Saved local report to {resolved_report_dir / 'index.html'}")
     return metrics
 
 
@@ -392,6 +529,36 @@ def evaluate_model(
         "binary_metrics": binary_metrics,
         "multiclass_metrics": {"severity": severity_metrics},
     }
+
+
+def evaluate_by_dataset(
+    *,
+    model: RelationAwareGraphModel,
+    dataset: MultiDatasetTrainingSet,
+    batch_size: int,
+    vocabulary,
+    normalization,
+    binary_criteria: dict[str, torch.nn.BCEWithLogitsLoss],
+    severity_criterion: torch.nn.CrossEntropyLoss,
+    binary_thresholds: dict[str, float],
+) -> dict[str, Any]:
+    breakdown: dict[str, Any] = {}
+    for dataset_name, indices in sorted(dataset.dataset_to_indices.items()):
+        subset = MultiDatasetTrainingSet([dataset.samples[index] for index in indices])
+        subset_loader = build_data_loader(subset, batch_size=batch_size, shuffle=False)
+        breakdown[dataset_name] = {
+            "sample_count": len(subset),
+            "evaluation": evaluate_model(
+                model=model,
+                data_loader=subset_loader,
+                vocabulary=vocabulary,
+                normalization=normalization,
+                binary_criteria=binary_criteria,
+                severity_criterion=severity_criterion,
+                binary_thresholds=binary_thresholds,
+            ),
+        }
+    return breakdown
 
 
 def collect_predictions(*, model: RelationAwareGraphModel, data_loader, vocabulary, normalization) -> dict[str, Any]:
@@ -573,12 +740,18 @@ def _compute_binary_metrics(*, targets: np.ndarray, scores: np.ndarray, threshol
     if targets.size == 0:
         return {"threshold": threshold, "support": 0}
     predictions = (scores >= threshold).astype(int)
+    confusion = confusion_matrix(targets.astype(int), predictions, labels=[0, 1])
+    tn, fp, fn, tp = confusion.ravel()
     precision, recall, f1_value, _ = precision_recall_fscore_support(
         targets.astype(int),
         predictions,
         average="binary",
         zero_division=0,
     )
+    if len(np.unique(targets.astype(int))) > 1:
+        balanced_accuracy = round(float(balanced_accuracy_score(targets.astype(int), predictions)), 4)
+    else:
+        balanced_accuracy = round(float(accuracy_score(targets.astype(int), predictions)), 4)
     metrics = {
         "threshold": round(float(threshold), 4),
         "support": int(targets.sum()),
@@ -587,7 +760,13 @@ def _compute_binary_metrics(*, targets: np.ndarray, scores: np.ndarray, threshol
         "recall": round(float(recall), 4),
         "f1": round(float(f1_value), 4),
         "accuracy": round(float(accuracy_score(targets.astype(int), predictions)), 4),
+        "balanced_accuracy": balanced_accuracy,
+        "specificity": round(float(tn / max(tn + fp, 1)), 4),
         "positive_rate": round(float(targets.mean()), 4),
+        "tp": int(tp),
+        "fp": int(fp),
+        "tn": int(tn),
+        "fn": int(fn),
     }
     if len(np.unique(targets.astype(int))) > 1:
         metrics["average_precision"] = round(float(average_precision_score(targets, scores)), 4)
@@ -602,6 +781,7 @@ def _compute_severity_metrics(*, targets: np.ndarray, predictions: np.ndarray) -
         "count": int(targets.shape[0]),
         "accuracy": round(float(accuracy_score(targets, predictions)), 4),
         "macro_f1": round(float(f1_score(targets, predictions, average="macro", zero_division=0)), 4),
+        "weighted_f1": round(float(f1_score(targets, predictions, average="weighted", zero_division=0)), 4),
     }
     per_class_precision, per_class_recall, per_class_f1, per_class_support = precision_recall_fscore_support(
         targets,
@@ -641,7 +821,7 @@ def _select_thresholds(binary_predictions: dict[str, dict[str, list[float]]]) ->
     return thresholds
 
 
-def _resolve_size_limits(*, size_profile: str, dataset_size: int | None) -> dict[str, dict[str, int]]:
+def _resolve_size_limits(*, size_profile: str, dataset_size: int | None) -> dict[str, dict[str, int | None]]:
     if dataset_size is not None:
         per_dataset = max(dataset_size // 5, 16)
         val_test = max(per_dataset // 3, 8)
@@ -649,6 +829,12 @@ def _resolve_size_limits(*, size_profile: str, dataset_size: int | None) -> dict
             "train": {name: per_dataset for name in DEFAULT_DATASET_WEIGHTS},
             "val": {name: val_test for name in DEFAULT_DATASET_WEIGHTS},
             "test": {name: val_test for name in DEFAULT_DATASET_WEIGHTS},
+        }
+    if size_profile == "max":
+        return {
+            "train": {name: None for name in DEFAULT_DATASET_WEIGHTS},
+            "val": {name: None for name in DEFAULT_DATASET_WEIGHTS},
+            "test": {name: None for name in DEFAULT_DATASET_WEIGHTS},
         }
     if size_profile not in SIZE_PROFILES:
         raise ValueError(f"Unsupported size profile: {size_profile}")
@@ -659,9 +845,11 @@ def _prefix_metrics(prefix: str, metrics: dict[str, Any]) -> dict[str, Any]:
     return {f"{prefix}/{key}": value for key, value in metrics.items()}
 
 
-def _log_dataset_summary(logger: SwanLabLogger, train_dataset: MultiDatasetTrainingSet, val_dataset: MultiDatasetTrainingSet, test_dataset: MultiDatasetTrainingSet) -> None:
-    if not logger.enabled:
-        return
+def _build_dataset_summary_payload(
+    train_dataset: MultiDatasetTrainingSet,
+    val_dataset: MultiDatasetTrainingSet,
+    test_dataset: MultiDatasetTrainingSet,
+) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "epoch": 0,
         "dataset/train_total": train_dataset.summarize("train").total_samples,
@@ -672,7 +860,98 @@ def _log_dataset_summary(logger: SwanLabLogger, train_dataset: MultiDatasetTrain
         summary = dataset.summarize(split_name)
         for dataset_name, count in summary.dataset_counts.items():
             payload[f"dataset/{split_name}/{dataset_name}"] = count
-    logger.log(payload)
+    return payload
+
+
+def _resolve_log_paths(
+    *,
+    metrics_output_path: Path,
+    log_path: Path | None,
+    jsonl_log_path: Path | None,
+) -> tuple[Path, Path]:
+    base_name = metrics_output_path.stem
+    return (
+        log_path or metrics_output_path.with_name(f"{base_name}-training.log"),
+        jsonl_log_path or metrics_output_path.with_name(f"{base_name}-training.jsonl"),
+    )
+
+
+def _log_run_start(
+    *,
+    run_logger: TrainingRunLogger,
+    artifact_path: Path,
+    metrics_path: Path,
+    train_config: MultiDatasetTrainingConfig,
+    size_profile: str,
+    size_limits: dict[str, dict[str, int | None]],
+    train_dataset: MultiDatasetTrainingSet,
+    val_dataset: MultiDatasetTrainingSet,
+    test_dataset: MultiDatasetTrainingSet,
+    log_path: Path,
+    jsonl_log_path: Path,
+    report_dir: Path,
+    swanlab_enabled: bool,
+) -> None:
+    run_logger.log_text("Starting ChainSentry multi-dataset training run.")
+    run_logger.log_text(f"Artifact path: {artifact_path}")
+    run_logger.log_text(f"Metrics path: {metrics_path}")
+    run_logger.log_text(f"Text log path: {log_path}")
+    run_logger.log_text(f"JSONL log path: {jsonl_log_path}")
+    run_logger.log_text(f"Report dir: {report_dir}")
+    run_logger.log_text(
+        "Dataset sizes: "
+        f"train={len(train_dataset)} val={len(val_dataset)} test={len(test_dataset)} "
+        f"size_profile={size_profile} swanlab={swanlab_enabled}"
+    )
+    run_logger.log_event(
+        "run_start",
+        {
+            "artifact_path": str(artifact_path),
+            "metrics_path": str(metrics_path),
+            "train_config": asdict(train_config),
+            "size_profile": size_profile,
+            "size_limits": size_limits,
+            "log_path": str(log_path),
+            "jsonl_log_path": str(jsonl_log_path),
+            "report_dir": str(report_dir),
+            "swanlab_enabled": swanlab_enabled,
+        },
+    )
+
+
+def _flatten_dataset_scalar_metrics(prefix: str, metrics_by_dataset: dict[str, Any]) -> dict[str, float]:
+    payload: dict[str, float] = {}
+    for dataset_name, entry in metrics_by_dataset.items():
+        payload[f"{prefix}/{dataset_name}/sample_count"] = float(entry["sample_count"])
+        scalar_metrics = entry["evaluation"]["scalar_metrics"]
+        for key, value in scalar_metrics.items():
+            if isinstance(value, (int, float)):
+                payload[f"{prefix}/{dataset_name}/{key}"] = float(value)
+    return payload
+
+
+def _summarize_epoch_log(epoch_log: dict[str, Any]) -> str:
+    return (
+        f"Epoch {epoch_log['epoch']} finished in {epoch_log['epoch_seconds']}s | "
+        f"train_loss={epoch_log.get('train/loss_total', 0.0):.4f} "
+        f"val_loss={epoch_log.get('val/loss_total', 0.0):.4f} "
+        f"approval_f1={epoch_log.get('val/approval/f1', 0.0):.4f} "
+        f"destination_f1={epoch_log.get('val/destination/f1', 0.0):.4f} "
+        f"simulation_f1={epoch_log.get('val/simulation/f1', 0.0):.4f} "
+        f"severity_acc={epoch_log.get('val/severity/accuracy', 0.0):.4f}"
+    )
+
+
+def _summarize_final_metrics(final_val_metrics: dict[str, Any], final_test_metrics: dict[str, Any]) -> str:
+    val_scalars = final_val_metrics["scalar_metrics"]
+    test_scalars = final_test_metrics["scalar_metrics"]
+    return (
+        "Final evaluation | "
+        f"val_loss={val_scalars.get('loss_total', 0.0):.4f} "
+        f"val_severity_acc={val_scalars.get('severity/accuracy', 0.0):.4f} "
+        f"test_loss={test_scalars.get('loss_total', 0.0):.4f} "
+        f"test_severity_acc={test_scalars.get('severity/accuracy', 0.0):.4f}"
+    )
 
 
 def main() -> None:
@@ -681,13 +960,18 @@ def main() -> None:
     parser.add_argument("--metrics-path", type=Path, default=GRAPH_MODEL_METRICS_PATH)
     parser.add_argument("--seed", type=int, default=GRAPH_MODEL_TRAINING_SEED)
     parser.add_argument("--epochs", type=int, default=GRAPH_MODEL_TRAINING_EPOCHS)
-    parser.add_argument("--size-profile", choices=tuple(SIZE_PROFILES), default="standard")
+    parser.add_argument("--size-profile", choices=tuple(SIZE_PROFILES) + ("max",), default="standard")
+    parser.add_argument("--dataset-size", type=int, default=None)
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--learning-rate", type=float, default=3e-4)
     parser.add_argument("--weight-decay", type=float, default=1e-4)
+    parser.add_argument("--train-samples-per-epoch", type=int, default=None)
     parser.add_argument("--enable-swanlab", action="store_true")
     parser.add_argument("--swanlab-project", default="chainsentry")
     parser.add_argument("--swanlab-run-name", default=None)
+    parser.add_argument("--log-path", type=Path, default=None)
+    parser.add_argument("--jsonl-log-path", type=Path, default=None)
+    parser.add_argument("--report-dir", type=Path, default=None)
     args = parser.parse_args()
 
     train_multidataset_model_artifact(
@@ -696,12 +980,17 @@ def main() -> None:
         seed=args.seed,
         epochs=args.epochs,
         size_profile=args.size_profile,
+        dataset_size=args.dataset_size,
         batch_size=args.batch_size,
         learning_rate=args.learning_rate,
         weight_decay=args.weight_decay,
+        train_samples_per_epoch=args.train_samples_per_epoch,
         swanlab_project=args.swanlab_project,
         swanlab_run_name=args.swanlab_run_name,
         enable_swanlab=args.enable_swanlab,
+        log_path=args.log_path,
+        jsonl_log_path=args.jsonl_log_path,
+        report_dir=args.report_dir,
     )
 
 

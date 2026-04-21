@@ -71,6 +71,8 @@ def test_synthetic_dataset_contains_multiple_risk_patterns() -> None:
 def test_training_exports_artifact_and_metrics(tmp_path) -> None:
     artifact_path = tmp_path / "graph-model.pt"
     metrics_path = tmp_path / "graph-model-metrics.json"
+    text_log_path = tmp_path / "graph-model-metrics-training.log"
+    jsonl_log_path = tmp_path / "graph-model-metrics-training.jsonl"
 
     metrics = train_graph_model_artifact(
         artifact_path=artifact_path,
@@ -84,3 +86,12 @@ def test_training_exports_artifact_and_metrics(tmp_path) -> None:
     assert metrics_path.exists()
     assert "category_metrics" in metrics
     assert "severity_accuracy" in metrics
+    assert "validation_by_dataset" in metrics
+    assert "test_by_dataset" in metrics
+    assert metrics["log_path"] == str(text_log_path)
+    assert metrics["jsonl_log_path"] == str(jsonl_log_path)
+    assert text_log_path.exists()
+    assert jsonl_log_path.exists()
+    assert "report_dir" in metrics
+    assert "report_files" in metrics
+    assert (tmp_path / "graph-model-metrics-report" / "index.html").exists()
